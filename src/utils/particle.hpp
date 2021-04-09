@@ -1,27 +1,58 @@
-#ifndef PARTICLE_H_
-#define PARTICLE_H_
+#include <glm/glm.hpp>
+#include <vector>
+#include <memory>
+#include <functional>
+#include <iostream>
 
-#include "glm/glm.hpp"
-#include "glm/gtx/transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
-#include "glm/gtc/matrix_transform.hpp"
+class Particle
+{
+  public:
+    // CONSTRUCTORS
+    Particle(const glm::vec3 &xyz, const float mass);
+    Particle(const float x, const float y, const float z, const float mass);
+    Particle(const Particle& Particle);
+    ~Particle();
 
-class Particle {
-public:
-	Particle(glm::vec3 pos, float mass, float damping, glm::vec2 texCoord);
+    // STATIC METHODS
+    static void Execute(const float h);
+    
+    // GETTERS
+    inline const glm::vec3 position() const { return m_position; };
+    inline const glm::vec3 speed() const { return m_speed; };
+    inline const glm::vec3 force() const { return m_force; };
+    inline const float mass() const { return m_mass; };
 
-	bool isStatic;
-	glm::vec3 normal;
-	glm::vec3 pos;
-	glm::vec3 lastPos;
-	glm::vec2 texCoord;
-	float damping;
-	float mass;
-	glm::vec3 force;
+    // METHODS
+    virtual inline void applyForce(const glm::vec3 &force) { m_force += force; };
+    virtual void execute(const float h) {
+      LeapFrog(h);
+    }
+    inline void clearForce() { m_force = glm::vec3(0.); }
 
-	void move(glm::vec3 delta);
-	void step(float timeStep);
+    void LeapFrog(const float h) {
+      m_speed += h * m_force / m_mass;
+      m_position += h * m_speed;
+    }
 
+    void EulerExplicit(const float h) {
+      m_position += h * m_speed;
+      m_speed += h * m_force / m_mass;
+    }
+
+  protected:
+    glm::vec3 m_position, m_speed, m_force;
+    float m_mass;
 };
 
-#endif
+class PFixedParticle : public Particle
+{
+  public:
+    // CONSTRUCTORS
+    PFixedParticle(const glm::vec3 &xyz, const float mass);
+    PFixedParticle(const float x, const float y, const float z, const float mass);
+
+    // METHODS
+    inline void applyForce(const glm::vec3 &force) override {};
+    inline void execute(const float h) override {};
+
+};

@@ -10,17 +10,11 @@
 #include "glm/gtx/fast_square_root.hpp"
 #include <vector>
 
-#include "particle.hpp"
 #include "constraint.hpp"
 
 class Flag {
 public:
 	Flag(float width, float height);
-	void loadTexture(char *filename);
-	void displayConstraints();
-	void step(float timeStep);
-	std::vector<Particle> particles;
-
 	std::vector<Constraint> constraints;
 	std::vector<GLuint> indexes;
 	GLuint vao;
