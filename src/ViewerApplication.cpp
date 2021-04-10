@@ -11,6 +11,7 @@
 #include "utils/cameras.hpp"
 #include "utils/images.hpp"
 #include "utils/lights.hpp"
+#include "utils/physics.hpp"
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -37,7 +38,6 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
 
   // Physic param
-  float mass = 1.f;
   float viscosity = 0.0024f;
   float rigidity = 0.00965f;
   float gravity = 0.5f;
@@ -75,9 +75,96 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
-	flag = new Flag(50, 50);
+	flag = new Flag(100, 50, 1.0f);
+  std::vector<Particle> vparticles;
+  std::vector<Link> vlinks;
 
   flag->initFlagVertex();
+  initFlagPhysics(flag->height,flag->width,flag->mass,flag->data,vparticles,vlinks);
+
+  // Lambda function to simulate physics
+  const auto simulateScene = [&](const float h) {
+    const float fe = 1. / h;
+
+    const glm::vec3 wind = windAmplitude * glm::cos(windFrequency * float(glfwGetTime())) * fe;
+    const glm::vec3 g = glm::vec3(0, -gravity * fe, 0);
+
+    Link::s_k = rigidity * fe * fe;
+    Link::s_z = viscosity * fe;
+
+    glBindBuffer(GL_ARRAY_BUFFER, flag->vbo);
+
+    for(size_t i = 0; i < vlinks.size(); ++i) {
+      vlinks[i].execute();    
+    }
+    // For positions
+    for(size_t i = 0; i < flag->data.size(); ++i) {
+      //vparticles[i]->applyForce(g + wind); // apply gravity and wind
+      vparticles[i]->executeleap(h);
+      vparticles[i]->clearForce();
+      flag->data[i].position = vparticles[i]->getPosition();
+    }
+/*
+    // For Normals
+    for(size_t i = 0; i < flag->width; ++i) {
+      for(size_t j = 0; j < flag->height; ++j) {
+        glm::vec3 sum(0.);
+        float count = 0.f;
+        if(j > 0 && i > 0) { // Top - Left (2 triangles)
+          sum += glm::cross(
+            vparticles[i * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
+            vparticles[(i - 1) * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition()
+          );
+          ++count;
+
+          sum += glm::cross(
+            vparticles[(i - 1) * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
+            vparticles[(i - 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition()
+          );
+          ++count;
+        }
+
+        if(j < flag->width - 1 && i < flag->width - 1) { // Bottom - Right (2 triangles)
+          sum += glm::cross(
+            vparticles[(i + 1) * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
+            vparticles[(i + 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition()
+          );
+          ++count;
+
+          sum += glm::cross(
+            vparticles[i * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
+            vparticles[(i + 1) * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition()
+          );
+          ++count;
+        }
+
+        if (j > 0 && i < flag->width - 1) { // Top - Right
+          sum += glm::cross(
+            vparticles[i * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
+            vparticles[(i + 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition()
+          );
+          ++count;
+        }
+
+        if(i > 0 && j < flag->width - 1) { // Left - Bottom
+          sum += glm::cross(
+            vparticles[(i - 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
+            vparticles[i * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition()
+          );
+          ++count;
+        }
+
+        flag->data[i * flag->height + j].normal = glm::normalize(sum / count);
+      }
+    }
+
+    void* ptr = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    std::memcpy(ptr, &flag->data[0], flag->data.size() * sizeof(FlagVertex));
+    bool done = glUnmapBuffer(GL_ARRAY_BUFFER);
+    assert(done);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);*/
+  };
 
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
@@ -215,6 +302,10 @@ int ViewerApplication::run()
     imguiRenderFrame();
 
     glfwPollEvents(); // Poll for and process events
+
+
+    // For Physics rendering
+    simulateScene(glfwGetTime() - seconds);
 
     auto ellapsedTime = glfwGetTime() - seconds;
     auto guiHasFocus =

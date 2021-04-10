@@ -10,21 +10,29 @@
 #include "glm/gtx/fast_square_root.hpp"
 #include <vector>
 
-#include "constraint.hpp"
+struct FlagVertex {
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 texCoords;
+};
 
 class Flag {
 public:
-	Flag(float width, float height);
-	std::vector<Constraint> constraints;
+	Flag(int width, int height, float mass);
+	~Flag();
 	std::vector<GLuint> indexes;
+	std::vector<FlagVertex> data;
 	GLuint vao;
 	GLuint vbo;
 	GLuint ibo;
-
-	void initFlagVertex();
-private:
 	int width;
 	int height;
+	float mass;
+	void initFlagVertex();
+
+private:
+	bool isTextured;
+	GLuint textureID;
 };
 
 #endif

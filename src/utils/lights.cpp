@@ -4,7 +4,7 @@ void DirectionalLight::loadDefaults()
 {
   m_color = glm::vec3(1, 1, 1);
   glm::vec3 dir = glm::vec3(1.f, 0.f, 0.f);
-  m_intensity = glm::vec3(1.f, 1.f, 1.f);
+  m_intensity = glm::vec3(10.f, 10.f, 10.f);
   setDirection(dir);
 }
 

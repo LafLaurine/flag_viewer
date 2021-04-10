@@ -10,34 +10,22 @@ class Particle
     // CONSTRUCTORS
     Particle(const glm::vec3 &xyz, const float mass);
     Particle(const float x, const float y, const float z, const float mass);
-    Particle(const Particle& Particle);
-    ~Particle();
+    Particle(const Particle& particle);
 
-    // STATIC METHODS
-    static void Execute(const float h);
-    
     // GETTERS
-    inline const glm::vec3 position() const { return m_position; };
-    inline const glm::vec3 speed() const { return m_speed; };
-    inline const glm::vec3 force() const { return m_force; };
-    inline const float mass() const { return m_mass; };
+    inline const glm::vec3 getPosition() const { return m_position; };
+    inline const glm::vec3 getSpeed() const { return m_speed; };
+    inline const glm::vec3 getForce() const { return m_force; };
+    inline const float getMass() const { return m_mass; };
 
     // METHODS
-    virtual inline void applyForce(const glm::vec3 &force) { m_force += force; };
-    virtual void execute(const float h) {
-      LeapFrog(h);
+    inline void applyForce(const glm::vec3 &force) { m_force += force; };
+    void executeleap(const float h) {
+      leapFrog(h);
     }
     inline void clearForce() { m_force = glm::vec3(0.); }
-
-    void LeapFrog(const float h) {
-      m_speed += h * m_force / m_mass;
-      m_position += h * m_speed;
-    }
-
-    void EulerExplicit(const float h) {
-      m_position += h * m_speed;
-      m_speed += h * m_force / m_mass;
-    }
+    void leapFrog(const float h);
+    void eulerExplicit(const float h);
 
   protected:
     glm::vec3 m_position, m_speed, m_force;
@@ -52,7 +40,7 @@ class PFixedParticle : public Particle
     PFixedParticle(const float x, const float y, const float z, const float mass);
 
     // METHODS
-    inline void applyForce(const glm::vec3 &force) override {};
-    inline void execute(const float h) override {};
+    inline void applyForce(const glm::vec3 &force) {};
+    inline void executeleap(const float h) {};
 
 };

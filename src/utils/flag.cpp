@@ -1,20 +1,18 @@
 #include "flag.hpp"
 
-
-struct FlagVertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 texCoords;
-};
-
-Flag::Flag(float width, float height) {
+Flag::Flag(int width, int height, float mass) {
 	this->width = width;
 	this->height = height;
+  this->mass = mass;
+  this->isTextured = true;
+	this->textureID = 0;
+}
+
+
+Flag::~Flag() {
 }
 
 void Flag::initFlagVertex() {
-
-  std::vector<FlagVertex> data;
 
   for(size_t i = 0; i < width; ++i) {
     for(size_t j = 0; j < height; ++j) {
