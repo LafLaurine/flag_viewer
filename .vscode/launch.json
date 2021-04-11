@@ -8,7 +8,7 @@
             "name": "Viewer on flag (Linux)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/gltf-viewer",
+            "program": "${workspaceFolder}/build/bin/flag-viewer",
             "args": [
               "viewer"
             ],

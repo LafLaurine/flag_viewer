@@ -7,6 +7,7 @@
 #include "utils/filesystem.hpp"
 
 #include "utils/shaders.hpp"
+#include "utils/flag.hpp"
 
 class ViewerApplication
 {
@@ -15,6 +16,7 @@ public:
       const std::vector<float> &lookatArgs,
       const std::string &vertexShader, const std::string &fragmentShader);
   int run();
+  void window_idle();
 
 private:
   // A range of indices in a vector containing Vertex Array Objects
@@ -34,8 +36,6 @@ private:
   std::string m_vertexShader = "forward.vs.glsl";
   std::string m_fragmentShader = "diffuse_directional_light.fs.glsl";
 
-  Flag* flag;
-
   bool m_hasUserCamera = false;
   Camera m_userCamera;
 
@@ -45,7 +45,7 @@ private:
   const std::string m_ImGuiIniFilename;
   // Last to be initialized, first to be destroyed:
   GLFWHandle m_GLFWHandle{int(m_nWindowWidth), int(m_nWindowHeight),
-      "glTF Viewer",
+      "flag viewer",
       m_OutputPath.empty()}; // show the window only if m_OutputPath is empty
   /*
     ! THE ORDER OF DECLARATION OF MEMBER VARIABLES IS IMPORTANT !

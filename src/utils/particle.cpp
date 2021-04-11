@@ -1,47 +1,33 @@
 #include "particle.hpp"
+#include "flag.hpp"
 
-Particle::Particle(const glm::vec3 &xyz, const float mass)
-: m_position(xyz),
-  m_speed(0, 0, 0),
-  m_force(0, 0, 0),
-  m_mass(mass)
-{
+void Particle::update(){
+	// Do nothing if fixed
+	if(fixed) return;
 
+	//compute force done by gravity
+	force += mass * GRAVITY;
+
+	//euler integration to get velocity and pos
+	velocity += TIMER * (force / mass);
+	position += TIMER * velocity;
+
+	collisionCheck();
+
+	//zero out force
+	force = glm::vec3(0);
 }
 
-Particle::Particle(const float x, const float y, const float z, const float mass)
-: Particle(glm::vec3(x, y, z), mass)
-{
-
+void Particle::collisionCheck(){
+	if(position.y < FLOORHEIGHT){
+		position.y = 2 * FLOORHEIGHT - position.y;
+		velocity.y = -ELASTICITY * velocity.y;
+		velocity.x = (1 - FRICTION) * velocity.x;
+		velocity.z = (1 - FRICTION) * velocity.z;
+	}
 }
 
-
-
-Particle::Particle(const Particle &particle)
-: Particle(particle.m_position, particle.m_mass)
-{
-
+void Particle::applyForce(glm::vec3 f){
+	force += f;
 }
 
-
-void Particle::leapFrog(const float h) {
-    m_speed += h * m_force / m_mass;
-    m_position += h * m_speed;
-}
-
-void Particle::eulerExplicit(const float h) {
-    m_position += h * m_speed;
-    m_speed += h * m_force / m_mass;
-}
-
-PFixedParticle::PFixedParticle(const glm::vec3 &xyz, const float mass)
-: Particle(xyz, mass)
-{
-
-}
-
-PFixedParticle::PFixedParticle(const float x, const float y, const float z, const float mass)
-: PFixedParticle(glm::vec3(x, y, z), mass)
-{
-
-}

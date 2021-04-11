@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 cmake_policy(SET CMP0048 NEW)
 
-project(gltf-viewer VERSION 0.0.1)
+project(flag-viewer VERSION 0.0.1)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     add_definitions(
@@ -107,7 +107,7 @@ endif()
 source_group("glsl" REGULAR_EXPRESSION ".*/*.glsl")
 source_group("third-party" REGULAR_EXPRESSION "third-party/*.*")
 
-set(APP gltf-viewer)
+set(APP flag-viewer)
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 
 file(

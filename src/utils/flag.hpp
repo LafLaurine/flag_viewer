@@ -1,38 +1,54 @@
-#ifndef Flag_H_
-#define Flag_H_
+#ifndef Flag_SIM_H
+#define Flag_SIM_H
 
 #include "GLFWHandle.hpp"
 
-#include "glm/glm.hpp"
-#include "glm/gtx/transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
-#include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtx/fast_square_root.hpp"
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/io.hpp>
+
+#include "particle.hpp"
+#include "damper.hpp"
+#include "triangle.hpp"
 #include <vector>
 
-struct FlagVertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 texCoords;
-};
+// Constants
+#define Flag_WIDTH 100
+#define Flag_HEIGHT 100
+#define SAMPLES_PER_FRAME 5
 
-class Flag {
+#define CAMERA_ZOOM 8 
+#define FLOORHEIGHT -2
+
+extern glm::vec3 wind;
+
+const float SPRING_CONST = 500.f;
+const float DAMP_CONST = 5.f;
+
+class Flag
+{
 public:
-	Flag(int width, int height, float mass);
-	~Flag();
-	std::vector<GLuint> indexes;
-	std::vector<FlagVertex> data;
-	GLuint vao;
-	GLuint vbo;
-	GLuint ibo;
-	int width;
-	int height;
-	float mass;
-	void initFlagVertex();
+	GLuint VAO, VBO, NBO, EBO;
+	std::vector<GLuint> indices;
 
-private:
-	bool isTextured;
-	GLuint textureID;
+	std::vector<Particle*> particles;
+	std::vector<Damper*> dampers;
+	std::vector<Triangle*> triangles;
+	std::vector<glm::vec3> positions;
+	std::vector<glm::vec3> normals;
+
+	Flag();
+	~Flag();
+
+	void rebind();
+	void genNormals();
+	void genWind();
+	void genDamp();
+	void translate(glm::vec3 dist);
+	void updateParticles();
+	void draw();
+	void update();
 };
 
 #endif

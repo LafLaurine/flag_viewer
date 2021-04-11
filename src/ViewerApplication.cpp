@@ -11,12 +11,21 @@
 #include "utils/cameras.hpp"
 #include "utils/images.hpp"
 #include "utils/lights.hpp"
-#include "utils/physics.hpp"
+
+enum WIND {W_NONE, W_X, W_Y, W_Z};
+WIND wind_mod;
+Flag *flag;
+glm::vec3 wind(0, 0, 0);
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
   if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
     glfwSetWindowShouldClose(window, 1);
+  }
+  if(key ==  GLFW_KEY_X && action == GLFW_RELEASE)
+  {
+    wind_mod = W_X;
+    wind.x += 5;
   }
 }
 
@@ -36,16 +45,14 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uLightDirection");
   const auto uLightIntensityLocation =
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
+  const auto uIsFloorLocation = glGetUniformLocation(glslProgram.glId(), "isFloor");
 
-  // Physic param
-  float viscosity = 0.0024f;
-  float rigidity = 0.00965f;
-  float gravity = 0.5f;
+  GLuint uniformP, uniformV, uniformCamPos; // Projection, view, and camera position uniform locations
 
-  const float PHYSICS_SCALE = 1e-5;
-
-  glm::vec3 windAmplitude(0.05f, 0.f, 2.25f);
-  glm::vec3 windFrequency(glm::pi<float>(), 0.f, glm::pi<float>());
+  GLuint VAO, VBO, NBO;
+  const GLfloat floorPos[] = {-CAMERA_ZOOM, FLOORHEIGHT, CAMERA_ZOOM, CAMERA_ZOOM, FLOORHEIGHT, CAMERA_ZOOM, 
+                              CAMERA_ZOOM, FLOORHEIGHT, -CAMERA_ZOOM, -CAMERA_ZOOM, FLOORHEIGHT, -CAMERA_ZOOM};
+  const GLfloat floorNormals[] = {0.f, 1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f, 0.f};
 
   glm::vec3 up = glm::vec3(0, 1, 0);
   glm::vec3 eye = glm::vec3(0, 0, 35);
@@ -75,99 +82,29 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
-	flag = new Flag(100, 50, 1.0f);
-  std::vector<Particle> vparticles;
-  std::vector<Link> vlinks;
+  // Generate the floor
+  glGenVertexArrays(1, &VAO);
+  glGenBuffers(1, &VBO);
+  glGenBuffers(1, &NBO);
+  glBindVertexArray(VAO);
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(floorPos), floorPos, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
+  glEnableVertexAttribArray(1);
+  glBindBuffer(GL_ARRAY_BUFFER, NBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(floorNormals), floorNormals, GL_STATIC_DRAW);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
 
-  flag->initFlagVertex();
-  initFlagPhysics(flag->height,flag->width,flag->mass,flag->data,vparticles,vlinks);
 
-  // Lambda function to simulate physics
-  const auto simulateScene = [&](const float h) {
-    const float fe = 1. / h;
-
-    const glm::vec3 wind = windAmplitude * glm::cos(windFrequency * float(glfwGetTime())) * fe;
-    const glm::vec3 g = glm::vec3(0, -gravity * fe, 0);
-
-    Link::s_k = rigidity * fe * fe;
-    Link::s_z = viscosity * fe;
-
-    glBindBuffer(GL_ARRAY_BUFFER, flag->vbo);
-
-    for(size_t i = 0; i < vlinks.size(); ++i) {
-      vlinks[i].execute();    
-    }
-    // For positions
-    for(size_t i = 0; i < flag->data.size(); ++i) {
-      //vparticles[i]->applyForce(g + wind); // apply gravity and wind
-      vparticles[i]->executeleap(h);
-      vparticles[i]->clearForce();
-      flag->data[i].position = vparticles[i]->getPosition();
-    }
-/*
-    // For Normals
-    for(size_t i = 0; i < flag->width; ++i) {
-      for(size_t j = 0; j < flag->height; ++j) {
-        glm::vec3 sum(0.);
-        float count = 0.f;
-        if(j > 0 && i > 0) { // Top - Left (2 triangles)
-          sum += glm::cross(
-            vparticles[i * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
-            vparticles[(i - 1) * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition()
-          );
-          ++count;
-
-          sum += glm::cross(
-            vparticles[(i - 1) * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
-            vparticles[(i - 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition()
-          );
-          ++count;
-        }
-
-        if(j < flag->width - 1 && i < flag->width - 1) { // Bottom - Right (2 triangles)
-          sum += glm::cross(
-            vparticles[(i + 1) * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
-            vparticles[(i + 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition()
-          );
-          ++count;
-
-          sum += glm::cross(
-            vparticles[i * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
-            vparticles[(i + 1) * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition()
-          );
-          ++count;
-        }
-
-        if (j > 0 && i < flag->width - 1) { // Top - Right
-          sum += glm::cross(
-            vparticles[i * flag->height + j - 1]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
-            vparticles[(i + 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition()
-          );
-          ++count;
-        }
-
-        if(i > 0 && j < flag->width - 1) { // Left - Bottom
-          sum += glm::cross(
-            vparticles[(i - 1) * flag->height + j]->getPosition() - vparticles[i * flag->height + j]->getPosition(),
-            vparticles[i * flag->height + j + 1]->getPosition() - vparticles[i * flag->height + j]->getPosition()
-          );
-          ++count;
-        }
-
-        flag->data[i * flag->height + j].normal = glm::normalize(sum / count);
-      }
-    }
-
-    void* ptr = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-    std::memcpy(ptr, &flag->data[0], flag->data.size() * sizeof(FlagVertex));
-    bool done = glUnmapBuffer(GL_ARRAY_BUFFER);
-    assert(done);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);*/
-  };
 
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
+    flag = new Flag();
+    wind_mod = W_NONE;
+
     glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -195,11 +132,15 @@ int ViewerApplication::run()
     glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjMatrix));
     glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 
-    glBindVertexArray(flag->vao);
-
-    glDrawElements(GL_TRIANGLES, flag->indexes.size(), GL_UNSIGNED_INT, 0);
-
+    glUniform1i(uIsFloorLocation, 1);
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, 4);
     glBindVertexArray(0);
+    glUniform1i(uIsFloorLocation, 0);
+    
+    if(flag) {
+      flag->draw();
+    }
 
   };
 
@@ -209,6 +150,7 @@ int ViewerApplication::run()
 
     const auto camera = cameraController->getCamera();
     drawScene(camera);
+    //window_idle();
 
     // GUI code:
     imguiNewFrame();
@@ -270,23 +212,18 @@ int ViewerApplication::run()
           ImGui::EndCombo();
           cameraController->setCamera(currentCamera);
         }
+      }
 
         if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
           static float theta = 0.0f;
           static float phi = 0.0f;
           static glm::vec3 lightColor = light.getColor();
-          static float lightIntensityFactor = 1.f;
+          static float lightIntensityFactor = 10.f;
           static bool lightFromCamera = true;
 
           ImGui::Checkbox("Light from camera", &lightFromCamera);
           if (lightFromCamera) {
             light.setDirection(-camera.front());
-          } else {
-              if (ImGui::SliderFloat("Theta", &theta, 0.f, glm::pi<float>()) || ImGui::SliderFloat("Phi", &phi, 0, 2.f * glm::pi<float>())) 
-              {
-                lightDirection = glm::vec3(glm::sin(theta) * glm::cos(phi),glm::cos(theta),glm::sin(theta) * glm::sin(phi));
-                light.setDirection(lightDirection);
-              }
           }
 
           if (ImGui::SliderFloat("Intensity", &lightIntensityFactor, 0.f, 10.f) ||
@@ -295,17 +232,12 @@ int ViewerApplication::run()
             light.setIntensity(lightIntensity);
           }
         }
-      }
       ImGui::End();
     }
 
     imguiRenderFrame();
 
     glfwPollEvents(); // Poll for and process events
-
-
-    // For Physics rendering
-    simulateScene(glfwGetTime() - seconds);
 
     auto ellapsedTime = glfwGetTime() - seconds;
     auto guiHasFocus =
@@ -319,12 +251,19 @@ int ViewerApplication::run()
 
 
   // clean up allocated GL data
-  glDeleteBuffers(1, &flag->ibo);
-  glDeleteBuffers(1, &flag->vbo);
-  glDeleteVertexArrays(1, &flag->vao);
+  glDeleteBuffers(1, &NBO);
+  glDeleteBuffers(1, &VBO);
+  glDeleteVertexArrays(1, &VAO);
 
   return 0;
 }
+
+
+// Window idle callback
+void ViewerApplication::window_idle(){
+	if(flag) flag->update();
+}
+
 
 ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
     uint32_t height,

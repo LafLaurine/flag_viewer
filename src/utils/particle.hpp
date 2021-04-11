@@ -1,46 +1,28 @@
-#include <glm/glm.hpp>
-#include <vector>
-#include <memory>
-#include <functional>
-#include <iostream>
+#pragma once
 
-class Particle
-{
-  public:
-    // CONSTRUCTORS
-    Particle(const glm::vec3 &xyz, const float mass);
-    Particle(const float x, const float y, const float z, const float mass);
-    Particle(const Particle& particle);
+#include "GLFWHandle.hpp"
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/io.hpp>
 
-    // GETTERS
-    inline const glm::vec3 getPosition() const { return m_position; };
-    inline const glm::vec3 getSpeed() const { return m_speed; };
-    inline const glm::vec3 getForce() const { return m_force; };
-    inline const float getMass() const { return m_mass; };
+class Particle{
+public:
 
-    // METHODS
-    inline void applyForce(const glm::vec3 &force) { m_force += force; };
-    void executeleap(const float h) {
-      leapFrog(h);
-    }
-    inline void clearForce() { m_force = glm::vec3(0.); }
-    void leapFrog(const float h);
-    void eulerExplicit(const float h);
+	const glm::vec3 GRAVITY = glm::vec3(0.f, -9.8f, 0.f);
+	const float TIMER = 1.f/3000.f;
+	const float ELASTICITY = 0.05f;
+	const float FRICTION = 0.80f;
 
-  protected:
-    glm::vec3 m_position, m_speed, m_force;
-    float m_mass;
-};
+	float mass;
+	glm::vec3 velocity = glm::vec3(0.f, 0.f, 0.f);
+	glm::vec3 force =  glm::vec3(0.f, 0.f, 0.f);
+	glm::vec3 position;
 
-class PFixedParticle : public Particle
-{
-  public:
-    // CONSTRUCTORS
-    PFixedParticle(const glm::vec3 &xyz, const float mass);
-    PFixedParticle(const float x, const float y, const float z, const float mass);
+	GLuint index;
+	bool fixed;
 
-    // METHODS
-    inline void applyForce(const glm::vec3 &force) {};
-    inline void executeleap(const float h) {};
-
+	void update();
+	void applyForce(glm::vec3);
+	void collisionCheck();
 };
