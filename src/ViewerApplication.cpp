@@ -9,7 +9,6 @@
 #include <glm/gtx/io.hpp>
 
 #include "utils/cameras.hpp"
-#include "utils/images.hpp"
 #include "utils/lights.hpp"
 
 enum WIND {W_NONE, W_X, W_Y, W_Z};
@@ -41,19 +40,12 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
-  const auto uLightDirectionLocation =
-      glGetUniformLocation(glslProgram.glId(), "uLightDirection");
   const auto uLightIntensityLocation =
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
-  const auto uIsFloorLocation = glGetUniformLocation(glslProgram.glId(), "isFloor");
 
   GLuint uniformP, uniformV, uniformCamPos; // Projection, view, and camera position uniform locations
 
   GLuint VAO, VBO, NBO;
-  const GLfloat floorPos[] = {-CAMERA_ZOOM, FLOORHEIGHT, CAMERA_ZOOM, CAMERA_ZOOM, FLOORHEIGHT, CAMERA_ZOOM, 
-                              CAMERA_ZOOM, FLOORHEIGHT, -CAMERA_ZOOM, -CAMERA_ZOOM, FLOORHEIGHT, -CAMERA_ZOOM};
-  const GLfloat floorNormals[] = {0.f, 1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f, 0.f};
-
   glm::vec3 up = glm::vec3(0, 1, 0);
   glm::vec3 eye = glm::vec3(0, 0, 35);
 
@@ -74,6 +66,7 @@ int ViewerApplication::run()
 
   // Light object
   DirectionalLight light;
+  flag = new Flag();
 
   glm::vec3 lightIntensity = light.getIntensity();
   glm::vec3 lightDirection = light.getDirection();
@@ -82,40 +75,14 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
-  // Generate the floor
-  glGenVertexArrays(1, &VAO);
-  glGenBuffers(1, &VBO);
-  glGenBuffers(1, &NBO);
-  glBindVertexArray(VAO);
-  glEnableVertexAttribArray(0);
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(floorPos), floorPos, GL_STATIC_DRAW);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
-  glEnableVertexAttribArray(1);
-  glBindBuffer(GL_ARRAY_BUFFER, NBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(floorNormals), floorNormals, GL_STATIC_DRAW);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-  glBindVertexArray(0);
-
-
-
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
-    flag = new Flag();
     wind_mod = W_NONE;
 
     glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     const auto viewMatrix = camera.getViewMatrix();
-    
-    if (uLightDirectionLocation >= 0) {
-      const auto lightDirectionVS =
-          glm::normalize(viewMatrix * glm::vec4(light.getDirection(), 0.f));
-      glUniform3fv(uLightDirectionLocation, 1, glm::value_ptr(lightDirectionVS));
-
-    }
 
     if (uLightIntensityLocation >= 0) {
       glUniform3f(uLightIntensityLocation, lightIntensity[0], lightIntensity[1],
@@ -132,12 +99,6 @@ int ViewerApplication::run()
     glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjMatrix));
     glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
 
-    glUniform1i(uIsFloorLocation, 1);
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 4);
-    glBindVertexArray(0);
-    glUniform1i(uIsFloorLocation, 0);
-    
     if(flag) {
       flag->draw();
     }
@@ -150,7 +111,7 @@ int ViewerApplication::run()
 
     const auto camera = cameraController->getCamera();
     drawScene(camera);
-    //window_idle();
+    window_idle();
 
     // GUI code:
     imguiNewFrame();
@@ -218,7 +179,7 @@ int ViewerApplication::run()
           static float theta = 0.0f;
           static float phi = 0.0f;
           static glm::vec3 lightColor = light.getColor();
-          static float lightIntensityFactor = 10.f;
+          static float lightIntensityFactor = light.getIntensity().x;
           static bool lightFromCamera = true;
 
           ImGui::Checkbox("Light from camera", &lightFromCamera);
