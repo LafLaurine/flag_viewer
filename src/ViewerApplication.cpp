@@ -11,21 +11,93 @@
 #include "utils/cameras.hpp"
 #include "utils/lights.hpp"
 
+enum MOUSE {M_NONE, MOVE};
 enum WIND {W_NONE, W_X, W_Y, W_Z};
 WIND wind_mod;
+MOUSE mouse_action;
+double lastX, lastY; // Last cursor x and y coords
+const glm::mat4 identity(1.f);
+
 Flag *flag;
-glm::vec3 wind(0, 0, 0);
+glm::vec3 wind(5.0f, 5.0f, 5.0f);
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
   if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
     glfwSetWindowShouldClose(window, 1);
   }
-  if(key ==  GLFW_KEY_X && action == GLFW_RELEASE)
-  {
-    wind_mod = W_X;
-    wind.x += 5;
+  if(action == GLFW_PRESS){
+      switch(key){
+      // Modify the wind's x direction when pressing x
+      case GLFW_KEY_X:
+        wind_mod = W_X;
+        break;
+
+      // Modify the wind's y direction when pressing x
+      case GLFW_KEY_Y:
+        wind_mod = W_Y;
+        break;
+
+      // Modify the wind's z direction when pressing x
+      case GLFW_KEY_Z:
+        wind_mod = W_Z;
+        break;
+
+      // Add or subtract
+      case GLFW_KEY_EQUAL:
+        if(wind_mod == W_X) {
+          wind.x += 5;
+          std::cout << wind.x << std::endl;
+        }
+        else if(wind_mod == W_Y)
+          wind.y += 5;
+        else if(wind_mod == W_Z)
+          wind.z += 5;
+        break;
+
+      case GLFW_KEY_MINUS:
+        if(wind_mod == W_X)
+          wind.x -= 5;
+        else if(wind_mod == W_Y)
+          wind.y -= 5;
+        else if(wind_mod == W_Z)
+          wind.z -= 5;
+        break;
+
+      // Kill the wind
+      case GLFW_KEY_O:
+        wind = glm::vec3(0.f, 0.f, 0.f);
+        break;
+      }
   }
+}
+
+// Mouse button callback
+void window_mouse(GLFWwindow* window, int button, int action, int mods){
+	// Mouse released, do nothing
+    if(action == GLFW_PRESS) {
+      glfwGetCursorPos(window, &lastX, &lastY);
+      if(button == GLFW_MOUSE_BUTTON_2){
+        mouse_action = MOVE;
+      }
+    }
+
+}
+
+// Mouse cursor moved callback
+void window_cursor(GLFWwindow* window, double x, double y){
+	if(mouse_action == MOVE){
+		// Derive the positive x in the current perspective view
+		//glm::vec3 pos_x = glm::cross(m_userCamera.up(), (m_userCamera.eye() - (-m_userCamera.up())));
+		// Calculate the translation matrix
+		glm::vec3 shiftAmount = ((float)(x - lastX) / 4200.0f) * glm::vec3(1.0f,1.0f,1.0f) + ((float)(lastY - y) / 180.0f) * glm::vec3(1.0f,1.0f,1.0f);
+		// Now shift the cloth up this much
+    std::cout << "hihi" << std::endl;
+		flag->translate(shiftAmount);
+		// Done translating, update x and y
+		lastX = x;
+		lastY = y;
+	}
 }
 
 int ViewerApplication::run()
@@ -55,12 +127,13 @@ int ViewerApplication::run()
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
           0.001f * maxDistance, 1.5f * maxDistance);
           
-  std::unique_ptr<CameraController> cameraController = std::make_unique<TrackballCameraController>(m_GLFWHandle.window(), 0.01f);
+  FirstPersonCameraController cameraController{
+      m_GLFWHandle.window(), 0.5f * maxDistance};
   if (m_hasUserCamera) {
-    cameraController->setCamera(m_userCamera);
+    cameraController.setCamera(m_userCamera);
   } else {
-    cameraController->setCamera(
-        Camera{eye, glm::vec3(0, 0, 0), up});
+    cameraController.setCamera(
+        Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
   }
 
 
@@ -78,8 +151,10 @@ int ViewerApplication::run()
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
     wind_mod = W_NONE;
+    mouse_action = M_NONE;
 
     glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
+    glClearColor(0.8f,0.8f,0.8f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     const auto viewMatrix = camera.getViewMatrix();
@@ -109,7 +184,7 @@ int ViewerApplication::run()
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose(); +iterationCount) {
     const auto seconds = glfwGetTime();
 
-    const auto camera = cameraController->getCamera();
+    const auto camera = cameraController.getCamera();    
     drawScene(camera);
     window_idle();
 
@@ -142,37 +217,6 @@ int ViewerApplication::run()
           const auto str = ss.str();
           glfwSetClipboardString(m_GLFWHandle.window(), str.c_str());
         }
-
-        const char *items[] = {"TrackBallCamera", "FPCamera"};
-        static int item_current_idx =
-            0; // Here we store our selection data as an index.
-        const char *combo_label =
-            items[item_current_idx]; // Label to preview before opening
-                                     // the combo (technically it could be
-                                     // anything)
-        if (ImGui::BeginCombo(
-                "Choose camera", combo_label, ImGuiComboFlags_PopupAlignLeft)) {
-          const auto currentCamera = cameraController->getCamera();
-          for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
-            const bool is_selected = (item_current_idx == n);
-            if (ImGui::Selectable(items[n], is_selected))
-              item_current_idx = n;
-
-            if (is_selected)
-              ImGui::SetItemDefaultFocus();
-
-            if (item_current_idx == 0) {
-              cameraController = std::make_unique<TrackballCameraController>(
-                  m_GLFWHandle.window(), 0.5f * maxDistance);
-            }
-            if (item_current_idx == 1) {
-              cameraController = std::make_unique<FirstPersonCameraController>(
-                  m_GLFWHandle.window(), 0.5f * maxDistance);
-            }
-          }
-          ImGui::EndCombo();
-          cameraController->setCamera(currentCamera);
-        }
       }
 
         if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -204,7 +248,7 @@ int ViewerApplication::run()
     auto guiHasFocus =
         ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
     if (!guiHasFocus) {
-      cameraController->update(float(ellapsedTime));
+      cameraController.update(float(ellapsedTime));
     }
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
@@ -222,7 +266,8 @@ int ViewerApplication::run()
 
 // Window idle callback
 void ViewerApplication::window_idle(){
-	if(flag) flag->update();
+	if(flag) 
+    flag->update();
 }
 
 
@@ -258,6 +303,10 @@ ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
                                   // positions in this file
 
   glfwSetKeyCallback(m_GLFWHandle.window(), keyCallback);
+
+	glfwSetMouseButtonCallback(m_GLFWHandle.window(), window_mouse);
+
+	glfwSetCursorPosCallback(m_GLFWHandle.window(), window_cursor);
 
   printGLVersion();
 }

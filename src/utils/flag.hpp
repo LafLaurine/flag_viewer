@@ -14,8 +14,8 @@
 #include <vector>
 
 // Constants
-#define Flag_WIDTH 100
-#define Flag_HEIGHT 100
+#define Flag_WIDTH 50
+#define Flag_HEIGHT 50
 #define SAMPLES_PER_FRAME 5
 
 #define CAMERA_ZOOM 8 

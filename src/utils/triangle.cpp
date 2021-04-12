@@ -5,12 +5,12 @@ Triangle::Triangle(Particle * p1, Particle * p2, Particle * p3){
 	Triangle::p1 = p1;
 	Triangle::p2 = p2;
 	Triangle::p3 = p3;
+	Triangle::wind = glm::vec3(5.0f,5.0f,5.0f);
 }
 
 void Triangle::applyWind(){
 	glm::vec3 velocity = (p1->velocity + p2->velocity + p3->velocity)/3.f - wind;
 	glm::vec3 normal = glm::cross((p2->position - p1->position), (p3->position - p1->position));
-
 	float area = 0.5 * glm::length(normal);
 	normal = glm::normalize(normal) * glm::dot(glm::normalize(velocity), normal);
 

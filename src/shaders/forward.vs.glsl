@@ -15,7 +15,7 @@ uniform mat4 uNormalMatrix;
 void main()
 {
     vViewSpacePosition = vec3(uModelViewMatrix * vec4(aPosition, 1));
-	vViewSpaceNormal = normalize(vec3(uNormalMatrix * vec4(aNormal, 0)));
+	vViewSpaceNormal = transpose(inverse(mat3(uModelViewMatrix))) * normalize(vViewSpaceNormal);
 	vTexCoords = aTexCoords;
     gl_Position =  uModelViewProjMatrix * vec4(aPosition, 1);
 }
