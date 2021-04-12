@@ -12,63 +12,17 @@
 #include "utils/lights.hpp"
 
 enum MOUSE {M_NONE, MOVE};
-enum WIND {W_NONE, W_X, W_Y, W_Z};
-WIND wind_mod;
 MOUSE mouse_action;
 double lastX, lastY; // Last cursor x and y coords
 const glm::mat4 identity(1.f);
 
 Flag *flag;
-glm::vec3 wind(5.0f, 5.0f, 5.0f);
+glm::vec3 wind(5.0f, 0.0f, 0.0f);
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
   if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
     glfwSetWindowShouldClose(window, 1);
-  }
-  if(action == GLFW_PRESS){
-      switch(key){
-      // Modify the wind's x direction when pressing x
-      case GLFW_KEY_X:
-        wind_mod = W_X;
-        break;
-
-      // Modify the wind's y direction when pressing x
-      case GLFW_KEY_Y:
-        wind_mod = W_Y;
-        break;
-
-      // Modify the wind's z direction when pressing x
-      case GLFW_KEY_Z:
-        wind_mod = W_Z;
-        break;
-
-      // Add or subtract
-      case GLFW_KEY_EQUAL:
-        if(wind_mod == W_X) {
-          wind.x += 5;
-          std::cout << wind.x << std::endl;
-        }
-        else if(wind_mod == W_Y)
-          wind.y += 5;
-        else if(wind_mod == W_Z)
-          wind.z += 5;
-        break;
-
-      case GLFW_KEY_MINUS:
-        if(wind_mod == W_X)
-          wind.x -= 5;
-        else if(wind_mod == W_Y)
-          wind.y -= 5;
-        else if(wind_mod == W_Z)
-          wind.z -= 5;
-        break;
-
-      // Kill the wind
-      case GLFW_KEY_O:
-        wind = glm::vec3(0.f, 0.f, 0.f);
-        break;
-      }
   }
 }
 
@@ -81,7 +35,6 @@ void window_mouse(GLFWwindow* window, int button, int action, int mods){
         mouse_action = MOVE;
       }
     }
-
 }
 
 // Mouse cursor moved callback
@@ -90,9 +43,8 @@ void window_cursor(GLFWwindow* window, double x, double y){
 		// Derive the positive x in the current perspective view
 		//glm::vec3 pos_x = glm::cross(m_userCamera.up(), (m_userCamera.eye() - (-m_userCamera.up())));
 		// Calculate the translation matrix
-		glm::vec3 shiftAmount = ((float)(x - lastX) / 4200.0f) * glm::vec3(1.0f,1.0f,1.0f) + ((float)(lastY - y) / 180.0f) * glm::vec3(1.0f,1.0f,1.0f);
+		glm::vec3 shiftAmount = ((float)(x - lastX)) * glm::vec3(1.0f,1.0f,1.0f) + ((float)(lastY - y)) * glm::vec3(1.0f,1.0f,1.0f);
 		// Now shift the cloth up this much
-    std::cout << "hihi" << std::endl;
 		flag->translate(shiftAmount);
 		// Done translating, update x and y
 		lastX = x;
@@ -105,6 +57,12 @@ int ViewerApplication::run()
   // Loader shaders
   const auto glslProgram = compileProgram({m_ShadersRootPath / m_vertexShader,
       m_ShadersRootPath / m_fragmentShader});
+  
+  // Setup OpenGL state for rendering
+  glEnable(GL_DEPTH_TEST);
+  glslProgram.use();
+
+  flag = new Flag();
 
   const auto modelViewProjMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
@@ -115,13 +73,7 @@ int ViewerApplication::run()
   const auto uLightIntensityLocation =
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
 
-  GLuint uniformP, uniformV, uniformCamPos; // Projection, view, and camera position uniform locations
-
-  GLuint VAO, VBO, NBO;
-  glm::vec3 up = glm::vec3(0, 1, 0);
-  glm::vec3 eye = glm::vec3(0, 0, 35);
-
-   // Build projection matrix
+  // Build projection matrix
   auto maxDistance = 100.f;
   const auto projMatrix =
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
@@ -139,23 +91,16 @@ int ViewerApplication::run()
 
   // Light object
   DirectionalLight light;
-  flag = new Flag();
 
   glm::vec3 lightIntensity = light.getIntensity();
   glm::vec3 lightDirection = light.getDirection();
-
-  // Setup OpenGL state for rendering
-  glEnable(GL_DEPTH_TEST);
-  glslProgram.use();
-
+  
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
-    wind_mod = W_NONE;
     mouse_action = M_NONE;
-
     glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
-    glClearColor(0.8f,0.8f,0.8f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(0.8f,0.8f,0.8f, 1.0f);
 
     const auto viewMatrix = camera.getViewMatrix();
 
@@ -177,7 +122,6 @@ int ViewerApplication::run()
     if(flag) {
       flag->draw();
     }
-
   };
 
   // Loop until the user closes the window
@@ -237,6 +181,18 @@ int ViewerApplication::run()
             light.setIntensity(lightIntensity);
           }
         }
+
+        static float windFactorX = 5.0f;
+        static float windFactorY = 5.0f;
+        static float windFactorZ = 5.0f;
+
+        if(ImGui::SliderFloat("Wind x", &windFactorX, 0.f, 10.f)) {
+          wind.x = windFactorX;
+        } if(ImGui::SliderFloat("Wind y", &windFactorY, 0.f, 10.f)) {
+          wind.y = windFactorY;
+        }  if(ImGui::SliderFloat("Wind z", &windFactorZ, 0.f, 10.f)) {
+          wind.z = windFactorZ;
+        }
       ImGui::End();
     }
 
@@ -253,12 +209,6 @@ int ViewerApplication::run()
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
   }
-
-
-  // clean up allocated GL data
-  glDeleteBuffers(1, &NBO);
-  glDeleteBuffers(1, &VBO);
-  glDeleteVertexArrays(1, &VAO);
 
   return 0;
 }
