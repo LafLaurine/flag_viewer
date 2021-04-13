@@ -10,14 +10,11 @@
 
 #include "utils/cameras.hpp"
 #include "utils/lights.hpp"
+#include "utils/flag.hpp"
 
-enum MOUSE {M_NONE, MOVE};
-MOUSE mouse_action;
-double lastX, lastY; // Last cursor x and y coords
-const glm::mat4 identity(1.f);
-
-Flag *flag;
-glm::vec3 wind(5.0f, 0.0f, 0.0f);
+static float const FPS = 30.0;
+static float const dt = 1.0f / FPS;
+bool isWireframe = false;
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -26,30 +23,13 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
   }
 }
 
-// Mouse button callback
-void window_mouse(GLFWwindow* window, int button, int action, int mods){
-	// Mouse released, do nothing
-    if(action == GLFW_PRESS) {
-      glfwGetCursorPos(window, &lastX, &lastY);
-      if(button == GLFW_MOUSE_BUTTON_2){
-        mouse_action = MOVE;
-      }
-    }
-}
+void checkWireframe()
+{
+	if(isWireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-// Mouse cursor moved callback
-void window_cursor(GLFWwindow* window, double x, double y){
-	if(mouse_action == MOVE){
-		// Derive the positive x in the current perspective view
-		//glm::vec3 pos_x = glm::cross(m_userCamera.up(), (m_userCamera.eye() - (-m_userCamera.up())));
-		// Calculate the translation matrix
-		glm::vec3 shiftAmount = ((float)(x - lastX)) * glm::vec3(1.0f,1.0f,1.0f) + ((float)(lastY - y)) * glm::vec3(1.0f,1.0f,1.0f);
-		// Now shift the cloth up this much
-		flag->translate(shiftAmount);
-		// Done translating, update x and y
-		lastX = x;
-		lastY = y;
-	}
 }
 
 int ViewerApplication::run()
@@ -62,7 +42,9 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
-  flag = new Flag();
+	int Nu = 20; 
+  int Nv = 20;
+	Flag flag(Nu, Nv, glslProgram);
 
   const auto modelViewProjMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
@@ -72,6 +54,7 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
   const auto uLightIntensityLocation =
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
+  const auto uWireframeLocation = glGetUniformLocation(glslProgram.glId(), "wireframe");
 
   // Build projection matrix
   auto maxDistance = 100.f;
@@ -97,7 +80,6 @@ int ViewerApplication::run()
   
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
-    mouse_action = M_NONE;
     glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.8f,0.8f,0.8f, 1.0f);
@@ -118,10 +100,7 @@ int ViewerApplication::run()
     glUniformMatrix4fv(modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewMatrix));
     glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjMatrix));
     glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-
-    if(flag) {
-      flag->draw();
-    }
+    glUniform1i(uWireframeLocation, (int)isWireframe);
   };
 
   // Loop until the user closes the window
@@ -130,7 +109,11 @@ int ViewerApplication::run()
 
     const auto camera = cameraController.getCamera();    
     drawScene(camera);
-    window_idle();
+
+		checkWireframe();
+		flag.updateForces();
+		flag.updatePosition(dt);
+		flag.render();
 
     // GUI code:
     imguiNewFrame();
@@ -182,17 +165,14 @@ int ViewerApplication::run()
           }
         }
 
-        static float windFactorX = 5.0f;
-        static float windFactorY = 5.0f;
-        static float windFactorZ = 5.0f;
+        ImGui::Checkbox("Enable wind", &(flag.is_wind));
+        ImGui::SliderFloat("Wind strength", &(flag.wind_strength), 0.0f, 0.0025f);
+        ImGui::SliderFloat("Wind direction x", &(flag.wind_direction.x), -1.0f, 1.0f);
+        ImGui::SliderFloat("Wind direction y", &(flag.wind_direction.y), -1.0f, 1.0f);
+        ImGui::SliderFloat("Wind direction z", &(flag.wind_direction.z), -1.0f, 1.0f);
 
-        if(ImGui::SliderFloat("Wind x", &windFactorX, 0.f, 10.f)) {
-          wind.x = windFactorX;
-        } if(ImGui::SliderFloat("Wind y", &windFactorY, 0.f, 10.f)) {
-          wind.y = windFactorY;
-        }  if(ImGui::SliderFloat("Wind z", &windFactorZ, 0.f, 10.f)) {
-          wind.z = windFactorZ;
-        }
+        ImGui::Checkbox("Wireframe", &isWireframe);
+
       ImGui::End();
     }
 
@@ -212,14 +192,6 @@ int ViewerApplication::run()
 
   return 0;
 }
-
-
-// Window idle callback
-void ViewerApplication::window_idle(){
-	if(flag) 
-    flag->update();
-}
-
 
 ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
     uint32_t height,
@@ -253,10 +225,5 @@ ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
                                   // positions in this file
 
   glfwSetKeyCallback(m_GLFWHandle.window(), keyCallback);
-
-	glfwSetMouseButtonCallback(m_GLFWHandle.window(), window_mouse);
-
-	glfwSetCursorPosCallback(m_GLFWHandle.window(), window_cursor);
-
   printGLVersion();
 }

@@ -1,15 +1,19 @@
-#version 330
+#version 330 core
 
 in vec3 vViewSpacePosition;
 in vec3 vViewSpaceNormal;
-in vec2 vTexCoords;
 
 uniform vec3 uLightIntensity;
 
-out vec3 fColor;
+uniform int wireframe;
+
+out vec3 color;
 
 void main()
 {
-  vec3 viewSpaceNormal=normalize(vViewSpaceNormal);
-  fColor =  abs(vec3(1 / 3.14) * uLightIntensity);
-}
+	vec3 normal = normalize(vViewSpaceNormal);
+	if(wireframe == 0)
+		color = vec3(3/1.14) * uLightIntensity;
+	else if (wireframe == 1)
+		color = vec3(0.0, 0.0, 1.0) * uLightIntensity;
+};

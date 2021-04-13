@@ -1,227 +1,354 @@
 #include "flag.hpp"
 
+static glm::vec3 const g(0.0f, -9.81f, 0.0f);
 
-Flag::Flag(){
-	//generate Particles
-	for(int i = 0; i < Flag_HEIGHT; i++){
-		for(int j = 0; j < Flag_WIDTH; j++){
-			Particle *p = new Particle();
-			unsigned int ind = 0;
-			p->mass = 0.1;
-			p->index = ind++;
+static float K_struct = 30.0f;
+static float K_shear = 30.0f;
+static float K_bend = 20.0f;
 
-			if (i == Flag_HEIGHT - 1) {
-				p->fixed = true;
-			}
-			else {
-				p->fixed = false;
-			}
+static float K_wind = 30.0f;
 
-			//arbitrary relative position of particle
-			p->position = glm::vec3(0.1 * (j - Flag_WIDTH / 2.0), 0.1 * i + 0.5, 0);
 
-			//Add particles and its info to datastructure  
-			positions.push_back(p->position);
-			normals.push_back(glm::vec3(0.f, 0.f, 0.f));
-			particles.push_back(p);
-		}
-	}
+static glm::vec3 getSpringForce(float const K, glm::vec3 const& u, float const L_rest)
+{
+	float const L = glm::l2Norm(u);
+	glm::vec3 spring_f = K * (L - L_rest) * u / L;
+	return spring_f;
+}
 
-	//generate spring dampers
-	for(int i = 0; i < Flag_HEIGHT; i++){
-		for(int j = 0; j < Flag_WIDTH; j++){
 
-			//edge case: can't connect anything to the top if at the very top
-			if(i < Flag_HEIGHT - 1){
+Flag::Flag(int width, int height, const GLProgram& program) :
+	Nu(width), Nv(height), m_forces(Nu*Nv, glm::vec3(0.0f)),
+	m_speed(Nu*Nv, glm::vec3(0.0f)), m_mass(1.0f),
+	is_wind(false), wind_strength(0.001f), wind_direction(glm::vec3(0.0f, 0.0f, 1.0f))
+{
+	initMesh();
 
-				//first check upper left
-				if(j > 0){
-					Damper *d1 = new Damper();
+	glGenVertexArrays(1, &m_vao);
+	glBindVertexArray(m_vao);
 
-					d1->p1 = particles[i * Flag_WIDTH + j];
-					d1->p2 = particles[(i+1) * Flag_WIDTH + (j-1)];
+	glGenBuffers(1, &m_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex)*m_vertices.size(), &m_vertices[0], GL_DYNAMIC_DRAW);
 
-					d1->length = glm::length(d1->p1->position - d1->p2->position);
-					d1->k = SPRING_CONST;
-					d1->d = DAMP_CONST;
+	int offset = 0;
 
-					dampers.push_back(d1);
-				}
-
-				//next check upper right
-				if(j < Flag_WIDTH - 1){
-					Damper *d2 = new Damper();
-
-					d2->p1 = particles[i * Flag_HEIGHT + j];
-					d2->p2 = particles[(i+1) * Flag_HEIGHT + (j+1)];
-
-					d2->length = glm::length(d2->p1->position - d2->p2->position);
-					d2->k = SPRING_CONST;
-					d2->d = DAMP_CONST;
-
-					dampers.push_back(d2);
-				}
-
-				// lastly directly upper 
-				Damper *d3 = new Damper();
-
-				d3->p1 = particles[i * Flag_HEIGHT + j];
-				d3->p2 = particles[(i + 1) * Flag_HEIGHT + j];
-
-				d3->length = glm::length(d3->p1->position - d3->p2->position);
-				d3->k = SPRING_CONST;
-				d3->d = DAMP_CONST;
-
-				dampers.push_back(d3);
-			}
-
-			//connect particle to right
-			if(j < Flag_WIDTH - 1){
-				Damper *d4 = new Damper();
-
-				d4->p1 = particles[i * Flag_HEIGHT + j];
-				d4->p2 = particles[i * Flag_HEIGHT + (j+1)];
-
-				d4->length = glm::length(d4->p1->position - d4->p2->position);
-				d4->k = SPRING_CONST;
-				d4->d = DAMP_CONST;
-
-				dampers.push_back(d4);
-			}
-		}
-	}
-
-	//generate indices for opengl
-	for(int i = 0; i < Flag_HEIGHT - 1; i++){
-		for(int j = 0; j < Flag_WIDTH - 1; j++){
-
-			int i1 = i * Flag_HEIGHT + j;
-			int i2 = i * Flag_HEIGHT + (j+1);
-			int i3 = (i + 1) * Flag_HEIGHT + j;
-
-			indices.push_back(i1);
-			indices.push_back(i2);
-			indices.push_back(i3);
-
-			triangles.push_back(new Triangle(particles[i1], particles[i2], particles[i3]));
-
-			i1 = i * Flag_HEIGHT + (j+1);
-			i2 = (i + 1) * Flag_HEIGHT + (j+1);
-			i3 = (i + 1) * Flag_HEIGHT + j;
-
-			indices.push_back(i1);
-			indices.push_back(i2);
-			indices.push_back(i3);
-
-			triangles.push_back(new Triangle(particles[i1], particles[i2], particles[i3]));
-		}
-	}
-
-	genNormals();
-
-	glGenVertexArrays(1, &VAO);
-	glGenBuffers(1, &VBO);
-	glGenBuffers(1, &NBO);
-	glGenBuffers(1, &EBO);
-	glBindVertexArray(VAO);
 	glEnableVertexAttribArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(glm::vec3), &positions[0], GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offset);
+
+	offset += sizeof(glm::vec3);
+
 	glEnableVertexAttribArray(1);
-	glBindBuffer(GL_ARRAY_BUFFER, NBO);
-	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), &indices[0], GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offset);
+
+	offset += sizeof(glm::vec3);
+
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offset);
+
+	glGenBuffers(1, &m_ibo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ibo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int)*m_indices.size(), &m_indices[0], GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 }
 
-Flag::~Flag(){
-	particles.clear();
-	normals.clear();
-	triangles.clear();
-
-	glDeleteVertexArrays(1, &VAO);
-	glDeleteBuffers(1, &NBO);
-	glDeleteBuffers(1, &EBO);
-	glDeleteBuffers(1, &VBO);
-}
-
-void Flag::rebind(){
-	glBindVertexArray(VAO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(glm::vec3), &positions[0], GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
-	glBindBuffer(GL_ARRAY_BUFFER, NBO);
-	glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-}
-
-void Flag::update(){
-	for(int i = 0; i < SAMPLES_PER_FRAME; i++){
-		updateParticles();
-		genDamp();
-		genWind();
-		genNormals();
+Flag::~Flag()
+{
+	if (m_vao != 0)
+	{
+		glDeleteVertexArrays(1, &m_vao);
 	}
-	rebind();
-}
 
-void Flag::updateParticles(){
-	for(Particle* p: particles){
-		p->update();
-		positions[p->index] = p->position;
+	if (m_vbo != 0)
+	{
+		glDeleteBuffers(1, &m_vbo);
+	}
+
+	if (m_ibo != 0)
+	{
+		glDeleteBuffers(1, &m_ibo);
 	}
 }
 
-void Flag::translate(glm::vec3 dist){
-	for(Particle *p: particles){
-		if(p->fixed){
-			p->position += dist;
+void Flag::initMesh()
+{
+	float step_u = 1.0f / (Nu-1);
+	float step_v = 1.0f / (Nv-1);
 
-			if(p->position.y <= FLOORHEIGHT)
-				p->position -= (dist);
+	for (int j = 0; j < Nv; j++)
+	{
+		for (int i = 0; i < Nu; i++)
+		{
+			glm::vec3 position(-0.5f + step_u * (float)i, 0.0f, -0.5f + step_v * (float)j);
+			glm::vec3 normal(0.0f);
+			glm::vec2 uv(step_u * (float)i, step_v * (float)j);
+
+			Vertex vertex; vertex.position = position; vertex.normal = normal; vertex.uv_coord = uv;
+			m_vertices.push_back(vertex);
+
+			if (j < Nv-1 && i < Nu-1)
+			{
+				// Triangle 1
+				m_indices.push_back(index(i, j));
+				m_indices.push_back(index(i + 1, j));
+				m_indices.push_back(index(i + 1, j + 1));
+
+				// Triangle 2
+				m_indices.push_back(index(i + 1, j + 1));
+				m_indices.push_back(index(i, j + 1));
+				m_indices.push_back(index(i, j));
+			}
 		}
 	}
+
+	updateNormals();
+
+	assert(m_indices.size() == (Nu-1) * (Nv-1) * 2 * 3 && m_vertices.size() == Nu*Nv);
 }
 
-void Flag::genDamp(){
-	for(Damper* d: dampers){
-		d->computeForce();
+void Flag::updateForces()
+{
+	assert(m_forces.size() == m_vertices.size());
+
+	int const N_total = Nu * Nv;
+	glm::vec3 const g_normalized = g / (float)N_total;
+
+	static float L_rest = 1.0f / (Nu - 1.0f);
+	static float L_diag = sqrt(pow(1.0f / (Nu - 1.0f), 2) + pow(1.0f / (Nv - 1.0f), 2));
+	static float L_far = 2.0f / (Nu - 1.0f);
+
+	for (int kv = 0; kv < Nv; kv++)
+	{
+		for (int ku = 0; ku < Nu; ku++)
+		{
+			glm::vec3 F = glm::vec3(0.0f);
+			
+			if (ku > 0)
+			{
+				glm::vec3 u_left = getPosition(ku - 1, kv) - getPosition(ku, kv);
+				F += getSpringForce(K_struct, u_left, L_rest);
+			}
+			if (kv > 0)
+			{
+				glm::vec3 u_down = getPosition(ku, kv - 1) - getPosition(ku, kv);
+				F += getSpringForce(K_struct, u_down, L_rest);
+			}
+			if (ku < Nu-1)
+			{
+				glm::vec3 u_right = getPosition(ku + 1, kv) - getPosition(ku, kv);
+				F += getSpringForce(K_struct, u_right, L_rest);
+			}
+			if (kv < Nv - 1)
+			{
+				glm::vec3 u_up = getPosition(ku, kv + 1) - getPosition(ku, kv);
+				F += getSpringForce(K_struct, u_up, L_rest);
+			}
+			if (ku > 0 && kv > 0)
+			{
+				glm::vec3 u_down_left = getPosition(ku-1, kv - 1) - getPosition(ku, kv);
+				F += getSpringForce(K_shear, u_down_left, L_diag);
+			}
+			if (ku < Nu-1 && kv < Nv-1)
+			{
+				glm::vec3 u_up_right = getPosition(ku + 1, kv + 1) - getPosition(ku, kv);
+				F += getSpringForce(K_shear, u_up_right, L_diag);
+			}
+			if (ku > 0 && kv < Nv - 1)
+			{
+				glm::vec3 u_up_left = getPosition(ku - 1, kv + 1) - getPosition(ku, kv);
+				F += getSpringForce(K_shear, u_up_left, L_diag);
+			}
+			if (ku < Nu-1 && kv > 0)
+			{
+				glm::vec3 u_down_right = getPosition(ku + 1, kv - 1) - getPosition(ku, kv);
+				F += getSpringForce(K_shear, u_down_right, L_diag);
+			}
+			if (ku > 1)
+			{
+				glm::vec3 u_far_left = getPosition(ku - 2, kv) - getPosition(ku, kv);
+				F += getSpringForce(K_bend, u_far_left, L_far);
+			}
+			if (kv > 1)
+			{
+				glm::vec3 u_far_down = getPosition(ku, kv - 2) - getPosition(ku, kv);
+				F += getSpringForce(K_bend, u_far_down, L_far);
+			}
+			if (ku < Nu-2)
+			{
+				glm::vec3 u_far_right = getPosition(ku + 2, kv) - getPosition(ku, kv);
+				F += getSpringForce(K_bend, u_far_right, L_far);
+			}
+			if (kv < Nv - 2)
+			{
+				glm::vec3 u_far_up = getPosition(ku, kv + 2) - getPosition(ku, kv);
+				F += getSpringForce(K_bend, u_far_up, L_far);
+			}
+
+			if (is_wind)
+			{
+				glm::vec3 normalized_wind_dir;
+				if (wind_direction == glm::vec3(0.0f, 0.0f, 0.0f))
+					normalized_wind_dir = glm::vec3(0.0f, 0.0f, 0.0f);
+				else
+					normalized_wind_dir = normalize(wind_direction);
+				glm::vec3 normal = getNormal(ku, kv);
+				glm::vec3 f_wind = wind_strength * K_wind * glm::dot(normal, normalized_wind_dir) * normal;
+				F += f_wind;
+			}
+
+			m_forces[index(ku, kv)] = F + g_normalized;
+		}
 	}
+	
+	m_forces[index(0, Nv-1)] = glm::vec3(0.0f);
+	m_forces[index(Nu-1, Nv-1)] = glm::vec3(0.0f);
+
+	/////
+	/////
+	///// 
+	/////
+	/////
+
+	securityCheck();
 }
 
-void Flag::genWind(){
-	for(Triangle* t: triangles){
-		t->applyWind();
+void Flag::updatePosition(float const dt)
+{
+	assert(m_forces.size() == m_speed.size());
+	assert(m_forces.size() == m_vertices.size());
+
+	float const mu = 0.1f;
+
+	for (int ku = 0; ku < Nu; ku++)
+	{
+		for (int kv = 0; kv < Nv; kv++)
+		{
+			glm::vec3 force = m_forces[index(ku, kv)];
+			glm::vec3 speed = m_speed[index(ku, kv)];
+
+			speed = (1-mu*dt)*speed + dt * force;
+			m_speed[index(ku, kv)] = speed;
+
+			m_vertices[index(ku, kv)].position += speed * dt;
+
+		}
 	}
+
+	securityCheck();
+	
+	updateNormals();
+
+	updateBuffer();
 }
 
-void Flag::genNormals(){
-	//init normals
-	for(glm::vec3 v: normals){
-		v = glm::vec3(0.f, 0.f, 0.f);
+void Flag::updateNormals()
+{
+	glm::vec3 up;
+	glm::vec3 left;
+
+	for (int kv = 0; kv < Nv; kv++)
+	{
+		for (int ku = 0; ku < Nu; ku++)
+		{
+			glm::vec3 normal = glm::vec3(0.0f);
+
+			if (ku > 0 && kv > 0)
+			{
+				up = getPosition(ku - 1, kv) - getPosition(ku, kv);
+				left = getPosition(ku, kv - 1) - getPosition(ku, kv);
+				normal += glm::cross(up, left);
+			}
+			if (ku < Nu - 1 && kv < Nv - 1)
+			{
+				up = getPosition(ku + 1, kv) - getPosition(ku, kv);
+				left = getPosition(ku, kv + 1) - getPosition(ku, kv);
+				normal += glm::cross(up, left);
+			}
+			if (ku > 0 && kv < Nv - 1)
+			{
+				up = getPosition(ku, kv + 1) - getPosition(ku, kv);
+				left = getPosition(ku - 1, kv) - getPosition(ku, kv);
+				normal += glm::cross(up, left);
+			}
+			if (ku < Nu - 1 && kv > 0)
+			{
+				up = getPosition(ku, kv - 1) - getPosition(ku, kv);
+				left = getPosition(ku + 1, kv) - getPosition(ku, kv);
+				normal += glm::cross(up, left);
+			}
+
+			m_vertices[index(ku, kv)].normal = glm::normalize(normal);
+		}
 	}
 
-	//get normal from cross product
-	for(Triangle* t: triangles){
-		Particle* a = t->p1;
-		Particle* b = t->p2;
-		Particle* c = t->p3;
-		
-		glm::vec3 norm = glm::normalize(glm::cross((b->position - a->position), (c->position - a->position)));
-		normals[a->index] += norm;
-		normals[b->index] += norm;
-		normals[c->index] += norm;
-	}
+	assert(m_vertices.size() == Nu * Nv);
 }
 
-void Flag::draw(){
-	glBindVertexArray(VAO);
-	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
+void Flag::updateBuffer()
+{
+	assert(m_vbo != -1 && m_vbo != 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex)*m_vertices.size(), &m_vertices[0]);
+}
+
+void Flag::render()
+{
+	glBindVertexArray(m_vao);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_ibo);
+	glDrawElements(GL_TRIANGLES, m_indices.size(), GL_UNSIGNED_INT, (void*)0);
+}
+
+unsigned int Flag::index(int i, int j)
+{
+	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
+	return (unsigned int)(j * Nu + i);
+}
+
+Vertex Flag::getVertex(int i, int j)
+{
+	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
+
+	int a = j * Nu + i;
+
+	return m_vertices[a];
+}
+
+glm::vec3 Flag::getPosition(int i, int j)
+{
+	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
+
+	int a = j * Nu + i;
+
+	return m_vertices[a].position;
+}
+
+glm::vec3 Flag::getNormal(int i, int j)
+{
+	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
+
+	int a = j * Nu + i;
+
+	return m_vertices[a].normal;
+}
+
+void Flag::securityCheck()
+{
+	// security check for divergence
+
+	static float const LIMIT = 30.0f;
+
+	for (int ku = 0; ku < Nu; ku++)
+	{
+		for (int kv = 0; kv < Nv; kv++)
+		{
+			glm::vec3 const& p = getPosition(ku, kv);
+
+			if (glm::l2Norm(p) > LIMIT)
+				exit(2);
+		}
+	}
 }
