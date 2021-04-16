@@ -11,10 +11,13 @@
 #include "utils/cameras.hpp"
 #include "utils/lights.hpp"
 #include "utils/flag.hpp"
+#include "utils/sphere.hpp"
 
-static float const FPS = 30.0;
+static float const FPS = 60.0;
 static float const dt = 1.0f / FPS;
-bool isWireframe = false;
+static bool isWireframe = false;
+
+static bool activeSpheres = false;
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -29,8 +32,35 @@ void checkWireframe()
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	else
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
 }
+
+inline glm::vec3 sphereCollisionForce(float distanceToCenter, 
+                                      const glm::vec3& sphereCenter,
+                                      float sphereRadius, 
+                                      const glm::vec3 particlePosition, 
+                                      const glm::vec3& forceParticle) {
+    glm::vec3 direction = glm::normalize(particlePosition - sphereCenter);
+    return direction * (1 / (1 + glm::pow(distanceToCenter, 2.f)));
+}
+
+void applySphereCollision(Flag& flag, const SphereHandler& sphereHandler, float multiplier, float radiusDelta, int Nu, int Nv) {
+    for (int i = 0; i < Nu; ++i) {
+      for (int j = 0; j < Nv; ++j) {
+        for (size_t k = 0; k < sphereHandler.positions.size(); ++k) {
+            float dist = glm::distance(sphereHandler.positions[k], flag.getPosition(i,j));
+            if (dist < sphereHandler.radius[k] + radiusDelta) {
+                flag.m_forces[i] += sphereCollisionForce(dist, sphereHandler.positions[k], sphereHandler.radius[k], flag.getPosition(i,j), flag.getForces(i,j)) * multiplier;
+            }
+        }
+      }
+    }
+}
+
+inline glm::vec3 repulseForce(float dst, const glm::vec3& P1, const glm::vec3& P2) {
+    glm::vec3 direction = glm::normalize(P1 - P2);
+    return direction * (1 / (1 + glm::pow(dst, 2.f)));
+}
+
 
 int ViewerApplication::run()
 {
@@ -42,8 +72,8 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
-	int Nu = 20; 
-  int Nv = 20;
+	int Nu = 50; 
+  int Nv = 50;
 	Flag flag(Nu, Nv, glslProgram);
 
   const auto modelViewProjMatrixLocation =
@@ -54,6 +84,8 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
   const auto uLightIntensityLocation =
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
+  const auto uColorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uColor");
   const auto uWireframeLocation = glGetUniformLocation(glslProgram.glId(), "wireframe");
 
   // Build projection matrix
@@ -71,13 +103,42 @@ int ViewerApplication::run()
         Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
   }
 
+  
+  SphereHandler sphereHandler;
+  sphereHandler.positions = {glm::vec3(0, -3, 2), glm::vec3(1.5, -3.5, 0.7), glm::vec3(3, -2, -1.5)};
+  sphereHandler.radius = {2, 1.5, .8};
+  float sphereCollisionMultiplier = 1.5;
+  float radiusDelta = 0.15;
 
   // Light object
   DirectionalLight light;
 
   glm::vec3 lightIntensity = light.getIntensity();
   glm::vec3 lightDirection = light.getDirection();
-  
+
+  GLuint sphereVAO;
+
+  // Création du VBO
+  glGenBuffers(1, &sphereVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, sphereVAO);
+
+  Sphere sphere(.3f, 32, 16);
+  GLuint sphereVertexCount = sphere.getVertexCount();
+
+  glBufferData(GL_ARRAY_BUFFER, sphereVertexCount * sizeof(Sphere::Vertex), sphere.getDataPointer(), GL_STATIC_DRAW);
+
+  // Création du VAO
+  glGenVertexArrays(1, &sphereVAO);
+  glBindVertexArray(sphereVAO);
+
+  glEnableVertexAttribArray(0);
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Sphere::Vertex), (const GLvoid*) offsetof(Sphere::Vertex, position));
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Sphere::Vertex), (const GLvoid*) offsetof(Sphere::Vertex, normal));
+
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);
+
   // Lambda function to draw the scene
   const auto drawScene = [&](const Camera &camera) {
     glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
@@ -101,8 +162,14 @@ int ViewerApplication::run()
     glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjMatrix));
     glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
     glUniform1i(uWireframeLocation, (int)isWireframe);
+
+    glUniform3f(uColorLocation, 0.15f,0.15f,0.8f);
   };
 
+  static float spherePosX = sphereHandler.positions[0].x;
+  static float spherePosZ = sphereHandler.positions[0].z;
+  static float spherePosY = sphereHandler.positions[0].y;
+  static float moveStep = 1.f;
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose(); +iterationCount) {
     const auto seconds = glfwGetTime();
@@ -111,9 +178,27 @@ int ViewerApplication::run()
     drawScene(camera);
 
 		checkWireframe();
+
+
+    if (activeSpheres)
+        applySphereCollision(flag, sphereHandler, sphereCollisionMultiplier, radiusDelta, Nu, Nv);
+
 		flag.updateForces();
 		flag.updatePosition(dt);
 		flag.render();
+
+    glBindVertexArray(sphereVAO);
+
+    glEnable(GL_DEPTH_TEST);
+
+    if (activeSpheres) {
+      for(uint32_t i = 0; i < sphereHandler.positions.size(); ++i) {
+          glUniform3f(uColorLocation, 1.0f,0.0f,0.0f);
+          glDrawArrays(GL_TRIANGLES, 0, sphereVertexCount);
+      }
+    }
+
+    glBindVertexArray(0);
 
     // GUI code:
     imguiNewFrame();
@@ -165,11 +250,24 @@ int ViewerApplication::run()
           }
         }
 
-        ImGui::Checkbox("Enable wind", &(flag.is_wind));
-        ImGui::SliderFloat("Wind strength", &(flag.wind_strength), 0.0f, 0.0025f);
-        ImGui::SliderFloat("Wind direction x", &(flag.wind_direction.x), -1.0f, 1.0f);
-        ImGui::SliderFloat("Wind direction y", &(flag.wind_direction.y), -1.0f, 1.0f);
-        ImGui::SliderFloat("Wind direction z", &(flag.wind_direction.z), -1.0f, 1.0f);
+        if (ImGui::CollapsingHeader("Wind", ImGuiTreeNodeFlags_DefaultOpen)) {
+          ImGui::Checkbox("Enable wind", &(flag.is_wind));
+          ImGui::SliderFloat("Wind strength", &(flag.wind_strength), 0.0f, 0.025f);
+          ImGui::SliderFloat("Wind direction x", &(flag.wind_direction.x), -1.0f, 1.0f);
+          ImGui::SliderFloat("Wind direction y", &(flag.wind_direction.y), -1.0f, 1.0f);
+          ImGui::SliderFloat("Wind direction z", &(flag.wind_direction.z), -1.0f, 1.0f);
+        }
+
+        if (ImGui::CollapsingHeader("Sphere", ImGuiTreeNodeFlags_DefaultOpen)) {
+          ImGui::Checkbox("Active sphere", &activeSpheres);
+
+          ImGui::SliderFloat("Collision multiplier", &(sphereCollisionMultiplier), 0.0f, 2.0f);
+          ImGui::SliderFloat("Radius", &(sphereHandler.radius[0]), 0.2f, 1.0f);
+          ImGui::SliderFloat("Position X", &(sphereHandler.positions[0].x), 0.0f, 5.0f);
+          ImGui::SliderFloat("Position Y", &(sphereHandler.positions[0].y), 0.0f, 5.0f);
+          ImGui::SliderFloat("Position Z", &(sphereHandler.positions[0].z), 0.0f, 5.0f);
+          ImGui::SliderFloat("Radius delta", &(radiusDelta), 0.0f, 1.0f);
+        }
 
         ImGui::Checkbox("Wireframe", &isWireframe);
 
@@ -186,6 +284,10 @@ int ViewerApplication::run()
     if (!guiHasFocus) {
       cameraController.update(float(ellapsedTime));
     }
+
+
+    sphereHandler.positions[0].z = glm::mix(sphereHandler.positions[0].z, spherePosZ, .08);
+    sphereHandler.positions[0].y = glm::mix(sphereHandler.positions[0].y, spherePosY, .08);
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
   }

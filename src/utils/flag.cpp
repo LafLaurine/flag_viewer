@@ -86,7 +86,10 @@ void Flag::initMesh()
 			glm::vec3 normal(0.0f);
 			glm::vec2 uv(step_u * (float)i, step_v * (float)j);
 
-			Vertex vertex; vertex.position = position; vertex.normal = normal; vertex.uv_coord = uv;
+			Vertex vertex; 
+			vertex.position = position; 
+			vertex.normal = normal; 
+			vertex.uv_coord = uv;
 			m_vertices.push_back(vertex);
 
 			if (j < Nv-1 && i < Nu-1)
@@ -206,12 +209,6 @@ void Flag::updateForces()
 	m_forces[index(0, Nv-1)] = glm::vec3(0.0f);
 	m_forces[index(Nu-1, Nv-1)] = glm::vec3(0.0f);
 
-	/////
-	/////
-	///// 
-	/////
-	/////
-
 	securityCheck();
 }
 
@@ -308,15 +305,6 @@ unsigned int Flag::index(int i, int j)
 	return (unsigned int)(j * Nu + i);
 }
 
-Vertex Flag::getVertex(int i, int j)
-{
-	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
-
-	int a = j * Nu + i;
-
-	return m_vertices[a];
-}
-
 glm::vec3 Flag::getPosition(int i, int j)
 {
 	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
@@ -324,6 +312,15 @@ glm::vec3 Flag::getPosition(int i, int j)
 	int a = j * Nu + i;
 
 	return m_vertices[a].position;
+}
+
+glm::vec3 Flag::getForces(int i, int j)
+{
+	assert(i >= 0 && i < Nu && j >= 0 && j < Nv);
+
+	int a = j * Nu + i;
+
+	return m_forces[a];
 }
 
 glm::vec3 Flag::getNormal(int i, int j)

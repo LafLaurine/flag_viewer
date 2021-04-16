@@ -25,19 +25,19 @@ private:
 	float m_mass;
 
 	int Nu, Nv;
-	std::vector<Vertex> m_vertices;
 	std::vector<unsigned int> m_indices;
 
-	std::vector<glm::vec3> m_forces;
 	std::vector<glm::vec3> m_speed;
 
 public:
 	Flag(int width, int height, const GLProgram& program);
 	~Flag();
-
+		
+	std::vector<Vertex> m_vertices;
 	bool is_wind;
 	float wind_strength;
 	glm::vec3 wind_direction;
+	std::vector<glm::vec3> m_forces;
 
 	void initMesh();
 	void updateForces();
@@ -48,9 +48,9 @@ public:
 	void render();
 	unsigned int index(int i, int j);
 
-	Vertex getVertex(int i, int j);
 	glm::vec3 getPosition(int i, int j);
 	glm::vec3 getNormal(int i, int j);
+	glm::vec3 getForces(int i, int j);
 
 	void securityCheck();
 
