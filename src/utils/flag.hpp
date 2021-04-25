@@ -44,7 +44,6 @@ public:
 	void updatePosition(float const dt);
 	void updateNormals();
 	void updateBuffer();
-
 	void render();
 	unsigned int index(int i, int j);
 
