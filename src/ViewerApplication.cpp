@@ -13,7 +13,8 @@
 #include "utils/flag.hpp"
 #include "utils/sphere.hpp"
 
-static float const dt = 0.f;
+float const FPS = 30.0f;
+float const dt = 1.0f/FPS;
 
 static bool isWireframe = false;
 static bool activeSpheres = false;
@@ -42,17 +43,19 @@ inline glm::vec3 sphereCollisionForce(float distanceToCenter,
     return direction * (1 / (1 + glm::pow(distanceToCenter, 2.f)));
 }
 
-void applySphereCollision(Flag& flag, const Sphere& sphere, float multiplier, float radiusDelta, int Nu, int Nv) {
-    for (int i = 0; i < Nu; ++i) {
-      for (int j = 0; j < Nv; ++j) {
-        for (size_t k = 0; k < sphere.m_positions.size(); ++k) {
-            float dist = glm::distance(sphere.m_positions[k], flag.getPosition(i,j));
-            if (dist < sphere.m_radius + radiusDelta) {
-              flag.m_forces[i] += sphereCollisionForce(dist, sphere.m_positions[k], sphere.m_radius, flag.getPosition(i,j), flag.getForces(i,j)) * multiplier;
-            }
+void applySphereCollision(Flag& flag, const SphereHandler& sphereHandler, float multiplier, float radiusDelta, int Nu, int Nv) {
+	for (int kv = 0; kv < Nv; kv++)
+	{
+		for (int ku = 0; ku < Nu; ku++)
+		{
+      for (size_t j = 0; j < sphereHandler.positions.size(); ++j) {
+        float dist = glm::distance(sphereHandler.positions[j], flag.getPosition(ku,kv));
+        if (dist < sphereHandler.radius[j] + radiusDelta) {
+          flag.m_forces[flag.index(ku, kv)] = sphereCollisionForce(dist, sphereHandler.positions[j], sphereHandler.radius[j], flag.getPosition(ku,kv), flag.getForces(ku,kv)) * multiplier;
         }
       }
     }
+  }
 }
 
 int ViewerApplication::run()
@@ -68,6 +71,7 @@ int ViewerApplication::run()
 	int Nu = 30; 
   int Nv = 30;
 	Flag flag(Nu, Nv, glslProgram);
+  Sphere sphere(0.4f, 32, 16);
 
   const auto modelViewProjMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
@@ -96,7 +100,9 @@ int ViewerApplication::run()
         Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
   }
 
-  
+  SphereHandler sphereHandler;
+  sphereHandler.positions = {glm::vec3(0,0,0), glm::vec3(0,-2,5)};
+  sphereHandler.radius = {2,2};
   float sphereCollisionMultiplier = 1.5f;
   float radiusDelta = 0.15f;
 
@@ -106,18 +112,17 @@ int ViewerApplication::run()
   glm::vec3 lightIntensity = light.getIntensity();
   glm::vec3 lightDirection = light.getDirection();
 
-  Sphere sphere(.3f, 16, 8);
   GLuint sphereVertexCount = sphere.getVertexCount();
 
   GLuint sphereVAO;
 
-  // Création du VBO
+  // Sohere VBO
   glGenBuffers(1, &sphereVAO);
   glBindBuffer(GL_ARRAY_BUFFER, sphereVAO);
 
   glBufferData(GL_ARRAY_BUFFER, sphereVertexCount * sizeof(Sphere::Vertex), sphere.getDataPointer(), GL_STATIC_DRAW);
 
-  // Création du VAO
+  // Sphere VAO
   glGenVertexArrays(1, &sphereVAO);
   glBindVertexArray(sphereVAO);
 
@@ -152,37 +157,36 @@ int ViewerApplication::run()
     glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjMatrix));
     glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
     glUniform1i(uWireframeLocation, (int)isWireframe);
-
-    glUniform3f(uColorLocation, 0.15f,0.15f,0.8f);
   };
 
-  static float moveStep = 1.f;
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose(); +iterationCount) {
     const auto seconds = glfwGetTime();
 
     const auto camera = cameraController.getCamera();    
-    drawScene(camera);
+    light.setDirection(-camera.front());
+    drawScene(camera);    
 
 		checkWireframe();
+
+    if(activeSpheres)
+    {
+      applySphereCollision(flag, sphereHandler, sphereCollisionMultiplier, radiusDelta, Nu, Nv);
+    }
     
-		flag.updateForces();
-		flag.updatePosition(dt);
-		flag.render();
-
     glBindVertexArray(sphereVAO);
-
-    glEnable(GL_DEPTH_TEST);
-
+    
     if (activeSpheres) {
-      for(uint32_t i = 0; i < sphere.m_positions.size(); ++i) {
-          glUniform3f(uColorLocation, 1.0f,0.0f,0.0f);
-          glDrawArrays(GL_TRIANGLES, 0, sphereVertexCount);
-      }
-      applySphereCollision(flag, sphere, sphereCollisionMultiplier, radiusDelta, Nu, Nv);
+        glUniform3f(uColorLocation, 1.0f,0.0f,0.0f);
+        glDrawArrays(GL_TRIANGLES, 0, sphereVertexCount);
     }
 
     glBindVertexArray(0);
+
+    glUniform3f(uColorLocation, 0.15f,0.15f,0.8f);
+		flag.updateForces();
+		flag.updatePosition(dt);
+    flag.render();
 
     // GUI code:
     imguiNewFrame();
@@ -220,13 +224,7 @@ int ViewerApplication::run()
           static float phi = 0.0f;
           static glm::vec3 lightColor = light.getColor();
           static float lightIntensityFactor = light.getIntensity().x;
-          static bool lightFromCamera = true;
-
-          ImGui::Checkbox("Light from camera", &lightFromCamera);
-          if (lightFromCamera) {
-            light.setDirection(-camera.front());
-          }
-
+          
           if (ImGui::SliderFloat("Intensity", &lightIntensityFactor, 0.f, 10.f) ||
               ImGui::ColorEdit3("color", (float *)&lightColor)) {
             lightIntensity = lightIntensityFactor * lightColor;
@@ -241,13 +239,25 @@ int ViewerApplication::run()
           ImGui::SliderFloat("Wind direction y", &(flag.wind_direction.y), -1.0f, 1.0f);
           ImGui::SliderFloat("Wind direction z", &(flag.wind_direction.z), -1.0f, 1.0f);
         }
+        static float spherePosZ = sphere.m_positions[0].z;
+        static float posZ = 0.0f;
+
+        static float spherePosX = sphere.m_positions[0].x;
+        static float posX = 0.0f;
 
         if (ImGui::CollapsingHeader("Sphere", ImGuiTreeNodeFlags_DefaultOpen)) {
           ImGui::Checkbox("Active sphere", &activeSpheres);
 
           ImGui::SliderFloat("Collision multiplier", &(sphereCollisionMultiplier), 0.0f, 2.0f);
-          ImGui::SliderFloat("Radius", &(sphere.m_radius), 0.2f, 1.0f);
-          ImGui::SliderFloat("Position X", &(sphere.m_positions[0].x), 0.0f, 5.0f);
+          ImGui::SliderFloat("Radius", &(sphere.m_radius), 0.5f, 1.0f);
+          if(ImGui::SliderFloat("Position X", &(posX), 0.0f, 5.0f)) {
+            sphere.m_positions[0].x = posX;
+            sphere.updatePosition(0,sphere.m_positions[0]);
+          }
+          if(ImGui::SliderFloat("Position Z", &(posZ), 0.0f, 5.0f)) {
+            sphere.m_positions[0].z = posZ;
+            sphere.updatePosition(0,sphere.m_positions[0]);
+          }
         }
 
         ImGui::Checkbox("Wireframe", &isWireframe);

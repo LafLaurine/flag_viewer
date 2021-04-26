@@ -31,7 +31,7 @@ void Sphere::build(GLfloat m_radius, GLsizei discLat, GLsizei discLong) {
         }
     }
 
-    m_nVertexCount = discLat * discLong * 6;
+    m_vertexCount = discLat * discLong * 6;
     
     GLuint idx = 0;
 
@@ -50,4 +50,8 @@ void Sphere::build(GLfloat m_radius, GLsizei discLat, GLsizei discLong) {
     for(auto& vertice: m_vertices) {
         m_positions.push_back(vertice.position);
     }
+}
+
+void Sphere::updatePosition(int index, glm::vec3 pos) {
+    m_positions[index] = pos;
 }

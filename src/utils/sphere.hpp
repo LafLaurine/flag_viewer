@@ -5,6 +5,7 @@
 class Sphere {
 public:
     void build(GLfloat radius, GLsizei discLat, GLsizei discLong);
+    void updatePosition(int index,glm::vec3 pos);
 
     struct Vertex {
         glm::vec3 position;
@@ -15,7 +16,7 @@ public:
     GLfloat m_radius;
 
     Sphere(GLfloat radius, GLsizei discLat, GLsizei discLong):
-        m_nVertexCount(0) {
+        m_vertexCount(0) {
         build(radius, discLat, discLong);
     }
 
@@ -26,10 +27,15 @@ public:
 
     // get number of vertices
     GLsizei getVertexCount() const {
-        return m_nVertexCount;
+        return m_vertexCount;
     }
 
 private:
     std::vector<Vertex> m_vertices;
-    GLsizei m_nVertexCount;
+    GLsizei m_vertexCount;
+};
+
+struct SphereHandler {
+    std::vector<glm::vec3> positions;
+    std::vector<float> radius;
 };

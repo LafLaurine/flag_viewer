@@ -5,11 +5,10 @@ static glm::vec3 const g(0.0f, -9.81f, 0.0f);
 static float K_struct = 30.0f;
 static float K_shear = 30.0f;
 static float K_bend = 20.0f;
-
 static float K_wind = 30.0f;
 
 
-static glm::vec3 getSpringForce(float const K, glm::vec3 const& u, float const L_rest)
+static glm::vec3 springForce(float const K, glm::vec3 const& u, float const L_rest)
 {
 	float const L = glm::l2Norm(u);
 	glm::vec3 spring_f = K * (L - L_rest) * u / L;
@@ -78,12 +77,10 @@ void Flag::initMesh()
 		{
 			glm::vec3 position(-0.5f + step_u * (float)i, 0.0f, -0.5f + step_v * (float)j);
 			glm::vec3 normal(0.0f);
-			glm::vec2 uv(step_u * (float)i, step_v * (float)j);
 
 			Vertex vertex; 
 			vertex.position = position; 
 			vertex.normal = normal; 
-			vertex.uv_coord = uv;
 			m_vertices.push_back(vertex);
 
 			if (j < Nv-1 && i < Nu-1)
@@ -108,8 +105,6 @@ void Flag::initMesh()
 
 void Flag::updateForces()
 {
-	assert(m_forces.size() == m_vertices.size());
-
 	int const N_total = Nu * Nv;
 	glm::vec3 const g_normalized = g / (float)N_total;
 
@@ -126,62 +121,62 @@ void Flag::updateForces()
 			if (ku > 0)
 			{
 				glm::vec3 u_left = getPosition(ku - 1, kv) - getPosition(ku, kv);
-				F += getSpringForce(K_struct, u_left, L_rest);
+				F += springForce(K_struct, u_left, L_rest);
 			}
 			if (kv > 0)
 			{
 				glm::vec3 u_down = getPosition(ku, kv - 1) - getPosition(ku, kv);
-				F += getSpringForce(K_struct, u_down, L_rest);
+				F += springForce(K_struct, u_down, L_rest);
 			}
 			if (ku < Nu-1)
 			{
 				glm::vec3 u_right = getPosition(ku + 1, kv) - getPosition(ku, kv);
-				F += getSpringForce(K_struct, u_right, L_rest);
+				F += springForce(K_struct, u_right, L_rest);
 			}
 			if (kv < Nv - 1)
 			{
 				glm::vec3 u_up = getPosition(ku, kv + 1) - getPosition(ku, kv);
-				F += getSpringForce(K_struct, u_up, L_rest);
+				F += springForce(K_struct, u_up, L_rest);
 			}
 			if (ku > 0 && kv > 0)
 			{
 				glm::vec3 u_down_left = getPosition(ku-1, kv - 1) - getPosition(ku, kv);
-				F += getSpringForce(K_shear, u_down_left, L_diag);
+				F += springForce(K_shear, u_down_left, L_diag);
 			}
 			if (ku < Nu-1 && kv < Nv-1)
 			{
 				glm::vec3 u_up_right = getPosition(ku + 1, kv + 1) - getPosition(ku, kv);
-				F += getSpringForce(K_shear, u_up_right, L_diag);
+				F += springForce(K_shear, u_up_right, L_diag);
 			}
 			if (ku > 0 && kv < Nv - 1)
 			{
 				glm::vec3 u_up_left = getPosition(ku - 1, kv + 1) - getPosition(ku, kv);
-				F += getSpringForce(K_shear, u_up_left, L_diag);
+				F += springForce(K_shear, u_up_left, L_diag);
 			}
 			if (ku < Nu-1 && kv > 0)
 			{
 				glm::vec3 u_down_right = getPosition(ku + 1, kv - 1) - getPosition(ku, kv);
-				F += getSpringForce(K_shear, u_down_right, L_diag);
+				F += springForce(K_shear, u_down_right, L_diag);
 			}
 			if (ku > 1)
 			{
 				glm::vec3 u_far_left = getPosition(ku - 2, kv) - getPosition(ku, kv);
-				F += getSpringForce(K_bend, u_far_left, L_far);
+				F += springForce(K_bend, u_far_left, L_far);
 			}
 			if (kv > 1)
 			{
 				glm::vec3 u_far_down = getPosition(ku, kv - 2) - getPosition(ku, kv);
-				F += getSpringForce(K_bend, u_far_down, L_far);
+				F += springForce(K_bend, u_far_down, L_far);
 			}
 			if (ku < Nu-2)
 			{
 				glm::vec3 u_far_right = getPosition(ku + 2, kv) - getPosition(ku, kv);
-				F += getSpringForce(K_bend, u_far_right, L_far);
+				F += springForce(K_bend, u_far_right, L_far);
 			}
 			if (kv < Nv - 2)
 			{
 				glm::vec3 u_far_up = getPosition(ku, kv + 2) - getPosition(ku, kv);
-				F += getSpringForce(K_bend, u_far_up, L_far);
+				F += springForce(K_bend, u_far_up, L_far);
 			}
 
 			if (is_wind)
@@ -200,6 +195,7 @@ void Flag::updateForces()
 		}
 	}
 	
+	//Fixed point must not be impacted by forces
 	m_forces[index(0, Nv-1)] = glm::vec3(0.0f);
 	m_forces[index(Nu-1, Nv-1)] = glm::vec3(0.0f);
 

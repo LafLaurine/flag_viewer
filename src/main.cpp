@@ -11,7 +11,7 @@ int main(int argc, char **argv)
   auto returnCode = 0;
 
   // args library https://github.com/taywee/args
-  args::ArgumentParser parser{"flag Viewer."};
+  args::ArgumentParser parser{"Flag Viewer"};
   args::HelpFlag help{parser, "help", "Display this help menu", {'h', "help"}};
   args::Group commands{parser, "commands"};
   args::Command info{commands, "info", "Display info about OpenGL",
