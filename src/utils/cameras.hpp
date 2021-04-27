@@ -13,6 +13,7 @@ public:
 
   Camera(glm::vec3 e, glm::vec3 c, glm::vec3 u) : m_eye(e), m_center(c), m_up(u)
   {
+    m_eye = glm::vec3(0.0f,0.0f,5.0f);
     const auto front = m_center - m_eye;
     const auto left = cross(m_up, front);
     assert(left != glm::vec3(0));
@@ -155,7 +156,7 @@ public:
 class FirstPersonCameraController : public CameraController
 {
 public:
-  FirstPersonCameraController(GLFWwindow *window, float speed = 1.f,
+  FirstPersonCameraController(GLFWwindow *window, float speed = .6f,
       const glm::vec3 &worldUpAxis = glm::vec3(0, 1, 0)) :
       m_pWindow(window),
       m_fSpeed(speed),

@@ -9,7 +9,6 @@
 #include <glm/gtx/norm.hpp>
 
 #include "GLFWHandle.hpp"
-
 #include "shaders.hpp"
 
 struct Vertex {
@@ -20,12 +19,14 @@ struct Vertex {
 class Flag {
 
 private:
+	//vertex objects
 	unsigned int m_vao, m_vbo, m_ibo;
+	//mass of the flag
 	float m_mass;
 
-	int Nu, Nv;
-	std::vector<unsigned int> m_indices;
-
+	//grid for the flag
+	int flagHeight, flagWidth;
+	std::vector<unsigned int> m_indexes;
 	std::vector<glm::vec3> m_speed;
 
 public:
@@ -51,5 +52,4 @@ public:
 	glm::vec3 getForces(int i, int j);
 
 	void securityCheck();
-
 };

@@ -148,7 +148,7 @@ An extension is defined by:
 
 Note the `ARB` affix, which stands for Architecture Review Board and is used
 for official extensions.  The extension above was created by the ARB, but there
-are many different affixes, like `NV` for Nvidia and `AMD` for, well, AMD.  Any
+are many different affixes, like `flagWidth` for Nvidia and `AMD` for, well, AMD.  Any
 group may also use the generic `EXT` affix.  Lists of extensions, together with
 their specifications, can be found at the
 [OpenGL Registry](https://www.opengl.org/registry/) and

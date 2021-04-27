@@ -4,7 +4,7 @@
 
 class Sphere {
 public:
-    void build(GLfloat radius, GLsizei discLat, GLsizei discLong);
+    void build(GLfloat radius, GLsizei lat, GLsizei longi);
     void updatePosition(int index,glm::vec3 pos);
 
     struct Vertex {
