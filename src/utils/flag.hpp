@@ -39,7 +39,7 @@ public:
 	std::vector<glm::vec3> m_forces;
 
 	void initMesh();
-	void updateForces();
+	void updateForces(float K_struct,float K_shear, float K_bend,float K_wind);
 	void updatePosition(float const dt);
 	void updateNormals();
 	void updateBuffer();

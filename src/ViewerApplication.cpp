@@ -103,8 +103,13 @@ int ViewerApplication::run()
   SphereHandler sphereHandler;
   sphereHandler.positions = {glm::vec3(0,0,0), glm::vec3(0,-2,5)};
   sphereHandler.radius = {2,2};
-  float sphereCollisionMultiplier = 1.5f;
-  float radiusDelta = 0.15f;
+  static float sphereCollisionMultiplier = 1.5f;
+  static float radiusDelta = 0.15f;
+
+	static float K_struct = 30.0f;
+	static float K_shear = 30.0f;
+	static float K_bend = 20.0f;
+	static float K_wind = 30.0f;
 
   // Light object
   DirectionalLight light;
@@ -184,7 +189,7 @@ int ViewerApplication::run()
     glBindVertexArray(0);
 
     glUniform3f(uColorLocation, 0.15f,0.15f,0.8f);
-		flag.updateForces();
+		flag.updateForces(K_struct,K_shear,K_bend,K_wind);
 		flag.updatePosition(dt);
     flag.render();
 
@@ -239,6 +244,15 @@ int ViewerApplication::run()
           ImGui::SliderFloat("Wind direction y", &(flag.wind_direction.y), -1.0f, 1.0f);
           ImGui::SliderFloat("Wind direction z", &(flag.wind_direction.z), -1.0f, 1.0f);
         }
+
+        if (ImGui::CollapsingHeader("Flag forces", ImGuiTreeNodeFlags_DefaultOpen)) {
+          ImGui::SliderFloat("Bend", &(K_bend), 10.0f, 50.f);
+          ImGui::SliderFloat("Shear", &(K_shear), 10.0f, 50.0f);
+          ImGui::SliderFloat("Struct", &(K_struct), 10.0f, 50.0f);
+          ImGui::SliderFloat("Wind", &(K_wind), 10.0f, 50.0f);
+        }
+
+        
         static float spherePosZ = sphere.m_positions[0].z;
         static float posZ = 0.0f;
 
@@ -295,10 +309,9 @@ ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
 {
   if (!lookatArgs.empty()) {
     m_hasUserCamera = true;
-    m_userCamera =
-        Camera{glm::vec3(lookatArgs[0], lookatArgs[1], lookatArgs[2]),
-            glm::vec3(lookatArgs[3], lookatArgs[4], lookatArgs[5]),
-            glm::vec3(lookatArgs[6], lookatArgs[7], lookatArgs[8])};
+    m_userCamera = Camera{glm::vec3(lookatArgs[0], lookatArgs[1], lookatArgs[2]),
+      glm::vec3(lookatArgs[3], lookatArgs[4], lookatArgs[5]),
+      glm::vec3(lookatArgs[6], lookatArgs[7], lookatArgs[8])};
   }
 
   if (!vertexShader.empty()) {

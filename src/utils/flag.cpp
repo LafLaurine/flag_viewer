@@ -2,12 +2,6 @@
 
 static glm::vec3 const g(0.0f, -9.81f, 0.0f);
 
-static float K_struct = 30.0f;
-static float K_shear = 30.0f;
-static float K_bend = 20.0f;
-static float K_wind = 30.0f;
-
-
 static glm::vec3 springForce(float const K, glm::vec3 const& u, float const L_rest)
 {
 	float const L = glm::l2Norm(u);
@@ -103,7 +97,7 @@ void Flag::initMesh()
 	assert(m_indices.size() == (Nu-1) * (Nv-1) * 2 * 3 && m_vertices.size() == Nu*Nv);
 }
 
-void Flag::updateForces()
+void Flag::updateForces(float K_struct,float K_shear, float K_bend,float K_wind)
 {
 	int const N_total = Nu * Nv;
 	glm::vec3 const g_normalized = g / (float)N_total;
