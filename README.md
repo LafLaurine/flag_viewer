@@ -19,8 +19,8 @@ make -j
 
 ## Commands
 
-Hold the middle click and move your mouse to turn around the scene
-Use the up and down arrow keys to move the camera up and down
-Use Z,S to zoom in or out in the scene
-Use A,E to rotate the camera
-Use Q,D to move left or right
+Hold the **middle click** and move your mouse to turn around the scene\
+Use the **up and down arrow keys** to move the camera up and down\
+Use **Z,S** to zoom in or out in the scene\
+Use **A,E** to rotate the camera\
+Use **Q,D** to move left or right
