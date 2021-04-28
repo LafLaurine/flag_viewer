@@ -1,6 +1,6 @@
 # Flag viewer
 
-A flag viewer made by Laurine LAFONTAINE for a master class at Université
+A flag viewer made by Laurine LAFONTAINE for a master class at Université Gustave Eiffel, IGM
 
 ## How to run the program ?
 
